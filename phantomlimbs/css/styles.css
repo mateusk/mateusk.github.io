@@ -1,0 +1,54 @@
+html{
+    height: 100%;
+}
+
+body{
+    background-color: black;
+    min-height: 100%;
+}
+
+header{
+    text-align: center;
+}
+
+footer{
+    text-align: center;
+}
+
+#sketches{
+    padding-left: 50px;
+    padding-right: 50px;
+}
+
+.sketch{
+    text-align: center;
+}
+
+h2{
+    font-family: 'Cormorant', serif;
+    font-style: italic;
+    font-weight: 300;
+    color: grey;
+}
+
+#sketches p{
+    font-family: 'Cormorant', serif;
+    font-style: italic;
+    font-weight: 300;
+    color: grey;
+}
+
+footer p{
+    font-family: 'Cormorant', serif;
+    font-weight: 300;
+    color: grey;
+}
+
+a{
+    text-decoration: none;
+    color: lightgray;
+}
+
+.vignette{
+    box-shadow: inset 0 0 100px black;
+}
