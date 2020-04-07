@@ -9,7 +9,7 @@ let tid = 0;
 let noiseVal = 0;
 
 function setup() {
-  //let canvas = createCanvas(800, 600);
+  let canvas = createCanvas(800, 600);
   canvas.parent('sketch1_container');
   createNewTree();
 }
