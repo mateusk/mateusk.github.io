@@ -4,7 +4,7 @@ body {
   height: 100vh;
   overflow-x: hidden;
   overscroll-behavior: none;
-  zoom: 1;
+  zoom: 0.85;
 }
 
 .loading-element {
@@ -140,12 +140,10 @@ body[can-show-hotspots] .hotspot {
   }
 }
 #phone-frame {
-  width: 435px;
-  height: 870px;
-  left: 50.36%;
-  top: 50.1%;
-  transform: translate(-50%, -50%);
   position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-36.25%, -49.8%);
 }
 
 #phone-frame img {
