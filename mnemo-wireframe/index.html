@@ -1,0 +1,368 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <script src="jquery.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100vh;
+      overflow-x: hidden;
+      overscroll-behavior: none;
+    }
+
+    .loading-element {
+      display: none;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      height: 4px;
+      width: 128px;
+      transform: translate(-50%, -50%);
+      user-select: none;
+      pointer-events: none;
+      animation: loading-element-enter .2s ease .5s;
+      animation-fill-mode: backwards;
+      background-color: #eee;
+    }
+
+    .loading-progress {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+      transform-origin: 0% 50%;
+      background-color: #aaa;
+      transition: transform .2s ease-in-out;
+    }
+
+    @keyframes loading-element-enter {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    body.is-loading .loading-element {
+      display: block;
+    }
+
+    body.is-loading .prototype-container {
+      display: none;
+    }
+
+    .prototype-container {
+      position: fixed;
+      height: 100%;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      overscroll-behavior: auto;
+    }
+
+    .prototype-container ::-webkit-scrollbar {
+      display: none;
+    }
+
+    .artboard {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
+      overflow: hidden;
+    }
+
+    .artboard.is-active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: all;
+    }
+
+    .artboard-scroll-container,
+    .artboard-fixed-container {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    .artboard-fixed-container {
+      pointer-events: none;
+    }
+
+    .artboard-scroll-container {
+      overflow: scroll;
+    }
+
+    .artboard-content {
+      position: absolute;
+      left: 0;
+      top: 0;
+      background-size: contain;
+      overflow: hidden; /* don't allow hotspots to create scrolling */
+    }
+
+    .hotspot {
+      cursor: pointer;
+      position: absolute;
+      opacity: 0;
+    }
+
+    body[can-show-hotspots] {
+      /* this helps hotspots work on iOS */
+      cursor: pointer;
+    }
+
+    body[can-show-hotspots] .hotspot {
+      background-color: rgba(239, 108, 0, .2);
+      box-shadow:
+          0 0 0 3px rgba(239, 108, 0, .5) inset,
+          0 4px 8px rgba(239, 108, 0, .25);
+    }
+
+    .highlight-hotspots .hotspot {
+      animation: hotspotAnimation .6s ease;
+    }
+
+    @keyframes hotspotAnimation {
+      0% {
+        opacity: 0;
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body class="is-loading"
+    can-show-hotspots>
+
+  <div class="loading-element">
+      <div class="loading-progress"></div>
+  </div>
+  <div class="prototype-container"></div>
+
+  <script>
+    const env = {
+      isIpad: navigator.userAgent.match(/iPad/),
+      isIphone: navigator.userAgent.match(/iPhone/),
+    };
+
+    class Proto {
+      constructor(prototypeData) {
+        this.prototypeData = prototypeData;
+        this.buildUi();
+      }
+
+      preloadImages() {
+        let $loadingProgress = $('.loading-progress');
+        let numLoaded = 0;
+        let numTotal = 0;
+
+        function updateProgress_() {
+          let scale = numTotal ? numLoaded / numTotal : 0;
+          $loadingProgress.css('transform', `scaleX(${scale})`);
+        }
+
+        updateProgress_();
+
+        function preloadImageUrl_(url) {
+          return new Promise((resolve, reject) => {
+            let img = document.createElement('img');
+            img.src = url;
+            img.onload = () => {
+              ++numLoaded;
+              updateProgress_();
+              resolve();
+            };
+            img.onerror = () => {
+              ++numLoaded;
+              updateProgress_();
+              console.error(`Error loading ${url}`); resolve();
+            };
+          });
+        }
+
+        let visitedArtboards = [];
+        let imageUrls = new Set([]);
+
+        let promises = [];
+        Object.keys(this.prototypeData.artboards).forEach(id => {
+          promises.push(preloadImageUrl_(`${id}.png`));
+          if (this.prototypeData.artboards[id].hasFixedLayers) {
+            promises.push(preloadImageUrl_(`${id}_fixed.png`));
+          }
+        });
+
+        numTotal = promises.length;
+        return Promise.all(promises);
+      }
+
+      buildUi() {
+        this.buildArtboards();
+
+        this.preloadImages().then(() => $('body').removeClass('is-loading'));
+
+        if (this.prototypeData.title) {
+          document.title = this.prototypeData.title;
+        }
+
+        $(window).on('hashchange', () => {
+          this.setArtboardVisible(this.getUrlInfo().artboardId);
+        });
+
+        $(document).click(() => {
+          $(document.body).removeClass('highlight-hotspots');
+          let f = document.body.offsetWidth;
+          $(document.body).addClass('highlight-hotspots');
+        });
+
+        $(window).on('resize', () => this.resize());
+
+        this.setArtboardVisible(this.getUrlInfo().artboardId);
+      }
+
+      resize() {
+        let deviceWidth = window.innerWidth;
+        let deviceHeight = window.innerHeight;
+
+        if (window.navigator.standalone && (env.isIpad || env.isIphone)) {
+          deviceWidth = screen.width;
+          deviceHeight = screen.height;
+        }
+
+        let width = this.startArtboard.viewportWidth || this.startArtboard.width;
+        let height = this.startArtboard.viewportHeight || this.startArtboard.height;
+        if (this.currentArtboard.viewportWidth && this.currentArtboard.viewportHeight) {
+          width = this.currentArtboard.viewportWidth;
+          height = this.currentArtboard.viewportHeight;
+        }
+
+        let xScale = deviceHeight / height;
+        let yScale = deviceWidth / width;
+        $('.prototype-container')
+            .css({
+              width: width,
+              height: height,
+              zoom: Math.min(1, Math.min(xScale, yScale)),
+            });
+      }
+
+      getUrlInfo() {
+        let hash = window.location.hash;
+
+        return {
+          artboardId: hash ? hash.substring(1) : this.prototypeData.flowStartArtboardId,
+        };
+      }
+
+      buildArtboards() {
+        Object.keys(this.prototypeData.artboards).forEach(id => {
+          let artboardData = this.prototypeData.artboards[id];
+          let $artboard = $('<div>')
+              .addClass('artboard')
+              .attr('data-artboard-id', id)
+              .appendTo('.prototype-container');
+
+          // add scrollable content
+          let $artboardScrollContainer = $('<div>')
+              .addClass('artboard-scroll-container')
+              .appendTo($artboard);
+          let $artboardScrollableContent = $('<div>')
+              .addClass('artboard-content')
+              .css({
+                backgroundImage: `url(${id}.png)`,
+                width: artboardData.width,
+                height: artboardData.height,
+              })
+              .appendTo($artboardScrollContainer);
+
+          // add fixed content
+          if (artboardData.hasFixedLayers) {
+            let $artboardFixedContainer = $('<div>')
+                .addClass('artboard-fixed-container')
+                .appendTo($artboard);
+            let $artboardFixedContent = $('<div>')
+                .addClass('artboard-content')
+                .css({
+                  backgroundImage: `url(${id}_fixed.png)`,
+                  width: artboardData.width,
+                  height: artboardData.height,
+                })
+                .appendTo($artboardFixedContainer);
+          }
+
+          if (id == this.prototypeData.flowStartArtboardId) {
+            // this is the start artboard
+            this.startArtboard = artboardData;
+            this.currentArtboard = artboardData;
+          }
+
+          artboardData.hotspots.forEach(hotspotData => {
+            let $hotspot = $('<div>')
+              .addClass('hotspot')
+              .attr('data-artboard-id', id)
+              .css({
+                left: hotspotData.rectangle.x,
+                top: hotspotData.rectangle.y,
+                width: hotspotData.rectangle.width,
+                height: hotspotData.rectangle.height,
+              })
+              .appendTo(hotspotData.isFixed
+                  ? $artboard // don't add to $artboardFixedContent because of pointer-events:none
+                  : $artboardScrollableContent);
+            $hotspot.click(event => {
+              this.gotoTarget(hotspotData.target)
+              event.stopPropagation();
+            });
+          });
+        });
+      }
+
+      gotoTarget(target) {
+        if (target == 'back') {
+          history.back();
+          return;
+        }
+
+        this.gotoArtboard(target);
+      }
+
+      gotoArtboard(artboardId) {
+        window.location.href= '#' + artboardId;
+      }
+
+      setArtboardVisible(artboardId) {
+        this.currentArtboard = this.prototypeData.artboards[artboardId];
+
+        $('.artboard-scroll-container').scrollLeft(0).scrollTop(0);
+
+        $(document.body).removeClass('highlight-hotspots');
+        $('.artboard').removeClass('is-active');
+        $(`.artboard[data-artboard-id="${artboardId}"]`).addClass('is-active');
+
+        this.resize();
+      }
+    }
+
+  </script>
+  <script>
+    new Proto(
+      {"title":"mnemo-app-wireframes","flowStartArtboardId":"49A81765-76A1-48F3-94AD-D211E0D4AC89","artboards":{"49A81765-76A1-48F3-94AD-D211E0D4AC89":{"title":"screens/splash-screen","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":0,"y":0,"width":375,"height":667},"target":"BFBFD68A-264A-44F9-8DE2-FF0903CF9A60","isFixed":0}],"hasFixedLayers":false},"BFBFD68A-264A-44F9-8DE2-FF0903CF9A60":{"title":"screens/login","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":67,"y":366,"width":240,"height":40},"target":"DF7CD1D0-3276-4F1E-8C00-9C1F540EA87D","isFixed":0},{"rectangle":{"x":234,"y":551,"width":57,"height":16},"target":"4FAAA99F-DFF5-48DF-98FD-E908D3117018","isFixed":0}],"hasFixedLayers":false},"DF7CD1D0-3276-4F1E-8C00-9C1F540EA87D":{"title":"screens/login-filled-out","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":67,"y":479,"width":240,"height":48},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0}],"hasFixedLayers":false},"4FAAA99F-DFF5-48DF-98FD-E908D3117018":{"title":"screens/register","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":24,"y":161,"width":326,"height":56},"target":"A09B5260-6AC5-4026-8572-B309C8AA6BC8","isFixed":0}],"hasFixedLayers":false},"6B94D7A9-9749-4831-A04D-82155002D5D1":{"title":"screens/map-view","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":150,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":75,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":0,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0}],"hasFixedLayers":false},"A09B5260-6AC5-4026-8572-B309C8AA6BC8":{"title":"screens/register-filled-out","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":24,"y":469.5,"width":326,"height":48},"target":"B391F0E8-BE67-48C3-8AF4-56A3F89A508F","isFixed":0}],"hasFixedLayers":false},"975703E1-86D2-48B7-ABE5-D04505FF2671":{"title":"screens/my-mnemos-main","width":375,"height":836,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":9,"y":28,"width":355,"height":40},"target":"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9","isFixed":0},{"rectangle":{"x":113,"y":96,"width":152,"height":32},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":85,"y":319,"width":55,"height":42},"target":"FECA6392-68D6-4F4D-9637-05CA0DDE6B2A","isFixed":0},{"rectangle":{"x":113,"y":556,"width":152,"height":40},"target":"7E73FC1F-A805-481C-A84B-28539613AAD2","isFixed":0},{"rectangle":{"x":150,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":75,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":0,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0}],"hasFixedLayers":false},"F9620080-7C70-4EBF-A699-18C1104D0482":{"title":"screens/feed","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":9,"y":28,"width":355,"height":40},"target":"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9","isFixed":0},{"rectangle":{"x":203,"y":480,"width":74,"height":30},"target":"FC44E85F-FD11-4C9D-ABDC-A9876FBB1D37","isFixed":0}],"hasFixedLayers":false},"B391F0E8-BE67-48C3-8AF4-56A3F89A508F":{"title":"screens/register-in-progress","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":0,"y":0,"width":375,"height":667},"target":"7468AA78-DC7F-4609-955C-06EB23BF483C","isFixed":0}],"hasFixedLayers":false},"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9":{"title":"screens/feed-search","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":185,"y":350,"width":21,"height":29},"target":"7E4CBDB6-C1C9-4B99-AAE9-2E5C1ACDC8B4","isFixed":0},{"rectangle":{"x":36,"y":124,"width":322,"height":48},"target":"2569D5A0-A560-488E-8341-6D4BF8FCFF06","isFixed":0},{"rectangle":{"x":112,"y":284,"width":152,"height":32},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0}],"hasFixedLayers":false},"FECA6392-68D6-4F4D-9637-05CA0DDE6B2A":{"title":"screens/my-mnemos-main-filter-dropdown","width":375,"height":839,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":9,"y":28,"width":355,"height":40},"target":"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9","isFixed":0},{"rectangle":{"x":113,"y":559,"width":152,"height":40},"target":"7E73FC1F-A805-481C-A84B-28539613AAD2","isFixed":0},{"rectangle":{"x":113,"y":96,"width":152,"height":32},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":92,"y":410,"width":117,"height":32},"target":"F2CDCDA9-BE7B-4340-8B02-E9C230450921","isFixed":0}],"hasFixedLayers":false},"7E73FC1F-A805-481C-A84B-28539613AAD2":{"title":"screens/new-mnemo","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":7,"y":39,"width":120,"height":32},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":11,"y":202,"width":353,"height":40},"target":"5798E8FD-7FF6-4A59-A944-17216F168413","isFixed":0},{"rectangle":{"x":11,"y":343,"width":353,"height":206},"target":"5798E8FD-7FF6-4A59-A944-17216F168413","isFixed":0},{"rectangle":{"x":11,"y":120,"width":353,"height":40},"target":"5798E8FD-7FF6-4A59-A944-17216F168413","isFixed":0},{"rectangle":{"x":11,"y":284,"width":353,"height":40},"target":"5798E8FD-7FF6-4A59-A944-17216F168413","isFixed":0}],"hasFixedLayers":false},"FC44E85F-FD11-4C9D-ABDC-A9876FBB1D37":{"title":"screens/feed-memory-favorited","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":9,"y":28,"width":355,"height":40},"target":"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9","isFixed":0}],"hasFixedLayers":false},"7468AA78-DC7F-4609-955C-06EB23BF483C":{"title":"screens/register-done","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":0,"y":0,"width":375,"height":667},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0}],"hasFixedLayers":false},"7E4CBDB6-C1C9-4B99-AAE9-2E5C1ACDC8B4":{"title":"screens/feed-search-map-place-tooltip","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":36,"y":124,"width":322,"height":48},"target":"2569D5A0-A560-488E-8341-6D4BF8FCFF06","isFixed":0},{"rectangle":{"x":112,"y":284,"width":152,"height":32},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":95,"y":334,"width":184,"height":71},"target":"CD4AF8E5-9263-4A05-8D85-31C98A7F2CB9","isFixed":0}],"hasFixedLayers":false},"2569D5A0-A560-488E-8341-6D4BF8FCFF06":{"title":"screens/feed-search-result","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":9,"y":28,"width":355,"height":40},"target":"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9","isFixed":0},{"rectangle":{"x":203,"y":443,"width":74,"height":30},"target":"FC44E85F-FD11-4C9D-ABDC-A9876FBB1D37","isFixed":0}],"hasFixedLayers":false},"F2CDCDA9-BE7B-4340-8B02-E9C230450921":{"title":"screens/my-mnemos-main-filter-dropdown-changed","width":375,"height":839,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":9,"y":28,"width":355,"height":40},"target":"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9","isFixed":0},{"rectangle":{"x":113,"y":96,"width":152,"height":32},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":150,"y":610,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":75,"y":610,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":0,"y":610,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0}],"hasFixedLayers":false},"5798E8FD-7FF6-4A59-A944-17216F168413":{"title":"screens/new-mnemo copy","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":7,"y":39,"width":120,"height":32},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0}],"hasFixedLayers":false},"CD4AF8E5-9263-4A05-8D85-31C98A7F2CB9":{"title":"screens/feed-search-result-from-map","width":375,"height":667,"viewportWidth":375,"viewportHeight":667,"hotspots":[{"rectangle":{"x":151,"y":611,"width":74,"height":56},"target":"975703E1-86D2-48B7-ABE5-D04505FF2671","isFixed":0},{"rectangle":{"x":76,"y":611,"width":75,"height":56},"target":"F9620080-7C70-4EBF-A699-18C1104D0482","isFixed":0},{"rectangle":{"x":1,"y":611,"width":75,"height":56},"target":"6B94D7A9-9749-4831-A04D-82155002D5D1","isFixed":0},{"rectangle":{"x":9,"y":28,"width":355,"height":40},"target":"7C712C9C-52E4-4F7B-9D33-1F94E9754CF9","isFixed":0}],"hasFixedLayers":false}}}
+    );
+  </script>
+
+</body>
+</html>
