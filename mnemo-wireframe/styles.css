@@ -4,7 +4,7 @@ body {
   height: 100vh;
   overflow-x: hidden;
   overscroll-behavior: none;
-  zoom: 1.2;
+  zoom: 1;
 }
 
 .loading-element {
