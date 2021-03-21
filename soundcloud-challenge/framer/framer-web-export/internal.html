@@ -1,0 +1,123 @@
+
+
+
+
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+            <script src="scripts/react/react.production.min.js"></script>
+<script src="scripts/react-dom/react-dom.production.min.js"></script>
+<script src="scripts/react-dom/react-dom-server.browser.production.min.js"></script>
+<script src="scripts/react-dom/react-dom-unstable-native-dependencies.production.min.js"></script>
+            <script>
+                (() => {
+                    const libraryURL = new URL(new URLSearchParams(location.search).get("libraryURL") || "/node_modules/framer/build/framer.debug.js", location.href)
+                    const supportedOrigins = new Set([location.origin, "https://development.framerusercontent.com", "https://framerusercontent.com"])
+                    if (!(supportedOrigins.has(libraryURL.origin) || libraryURL.origin.startsWith("http://127.0.0.1:"))) throw new Error("Unable to load libraryURL from origin: " + libraryURL.origin)
+                    document.write('<script src="' + libraryURL.toString() + '"><\/script>')
+                })()
+            </script>
+        
+
+        
+        <link href="styles/Draft.css" rel="stylesheet" />
+        <link href="styles/style.css" rel="stylesheet" />
+        
+        
+        
+        
+        
+        
+        
+        
+        
+            <link href="styles/preview-next-export-styles.linaria.css" rel="stylesheet" />
+        
+        <link href="fonts/inter/inter.css" rel="stylesheet" />
+
+        <!-- Workaround for a WebKit bug: loading via URL from the stylesheet is denied if this file is loaded via file:/// -->
+        <style>
+            * {
+                -webkit-font-smoothing: antialiased;
+            }
+
+            html,
+            body,
+            main {
+                height: 100%;
+            }
+
+            @font-face {
+                font-family: "Input Mono";
+                font-style: normal;
+                font-weight: 400;
+                src: local("Input Mono"), url("fonts/QbHJVUjy6YgY.app.ttf") format("truetype");
+            }
+
+            .framerInternalUI-componentPlaceholder,
+            .framerInternalUI-errorPlaceholder {
+                border: calc(1px * var(--framerInternalCanvas-canvasPlaceholderContentScaleFactor, 1)) dashed currentColor;
+                border-radius: calc(6px * var(--framerInternalCanvas-canvasPlaceholderContentScaleFactor, 1));
+                font-size: calc(12px * var(--framerInternalCanvas-canvasPlaceholderContentScaleFactor, 1));
+            }
+
+            /* Placeholder for loading components. */
+            .framerInternalUI-componentPlaceholder {
+                border-style: solid;
+                border-color: rgba(149, 149, 149, 0.15);
+                background-color: rgba(149, 149, 149, 0.1);
+                color: #a5a5a5;
+            }
+
+            /* Placeholder for components with errors. */
+            .framerInternalUI-errorPlaceholder {
+                border-style: solid;
+                border-color: rgba(149, 149, 149, 0.15);
+                background-color: rgba(149, 149, 149, 0.1);
+                color: #a5a5a5;
+            }
+
+            .framerInternalUI-componentPlaceholder .text,
+            .framerInternalUI-errorPlaceholder .text {
+                transition: opacity 300ms;
+            }
+
+            .framerInternalUI-componentPlaceholder .pending,
+            .framerInternalUI-errorPlaceholder .pending {
+                opacity: 0;
+            }
+        </style>
+    </head>
+
+    <body>
+        <main></main>
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+            <script src="scripts/preview-next-export.js"></script>
+        
+    </body>
+</html>
